@@ -1,0 +1,220 @@
+---
+title: "Boletin Ecommerce Diciembre"
+author: "Axel Fuentes Pacheco"
+date: "13-12-2022"
+output: 
+  html_document:
+    toc: yes
+    toc_float:
+      collapse: yes
+    number_sections: yes
+    theme: journal
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Plan más vendido
+
+El plan de 49.9 (24.9 los 3 primeros meses)  sigue siendo ampliamente el más vendido  con un 63\% en el mes de octubre, la publicidad debe estar enfocada al plan de 49.9, por otro lado el plan de 39.9 fue el segundo más vendido desplazando al plan de 29.9 que meses antes era el segundo más vendido, ojo el plan de 39.9 ya no cuenta con la promoción de 31.9.
+El plan de 55.9 por promoción esta 31.9 únicamente en LIMA, ICA y UCAYALI
+
+```{r, message=FALSE, echo=FALSE}
+library(tidyverse)
+library(lubridate)
+library(openxlsx)
+library(plyr)
+library(dplyr)
+library(highcharter)
+library(kableExtra)
+library(formattable)
+library(knitr)
+
+db=read.xlsx("D:\\BITEL\\KPI\\ho_do.xlsx",sheet =7)
+area=read.xlsx("D:\\BITEL\\KPI\\Area code.xlsx")
+
+PLANB <- filter(db, status_id=="9")
+PLANB <- as.data.frame(table(PLANB$plan))
+
+hc <- PLANB %>%
+  hchart(
+    "pie", hcaes(x = Var1, y = Freq),
+    name = ""
+  )
+hc
+
+```
+
+
+# Frecuencia de ordenes subidas por horas
+
+Durante el mes de Noviembre, desde las 8:40 am hasta las 11 am, se subió 12,744 órdenes casi 411 órdenes por día, siendo su hora pico las 10 am. Es decir a esa hora los clientes están más activos y al tanto de su celular.
+
+```{r,, message=FALSE, echo=FALSE}
+hist(db$create_hour, xlim=c(0,max(db$create_hour)), ylim=c(0,max(table(db$create_hour))),
+     label=TRUE, axes=T, 
+     breaks=28, col = "#457b9d",border = "#f1faee", 
+     main="Horas en que suben las órdenes", xlab = "Horas", 
+     ylab = "Frecuencia absoluta")
+```
+
+# Zonas delivery con mayor efectividad
+```{r, message=FALSE, echo=FALSE}
+ENT <- db
+ names(db)[6]='Area.code'
+ names(area)[8]='LUGAR'
+ area1=area[,c("Area.code","LUGAR")]
+ ENT <- ENT[,c("AREA_CODE","shop_deliver","status_id","demora_12h","branch_create",
+             "CONSULTANT_CHANNEL","CONSULT_DESCRIPTION")]
+
+ENTT <- filter(ENT, status_id%in%c("4","6","7","9"),CONSULT_DESCRIPTION%in%c("-",
+                "Consultation success"), 
+               CONSULTANT_CHANNEL%in%c("Acesor Distribuidor","Happy call Online",
+                                       "Dealer Online Channel","Root",
+                                       "Business Center Channel"))
+
+ENTT1 <- ENTT[,c("AREA_CODE",'branch_create')]
+
+ENTS <- filter(ENT, status_id=="9", CONSULTANT_CHANNEL%in%c("Acesor Distribuidor",
+                                                            "Happy call Online",
+                                                           "Dealer Online Channel","Root",
+                                                          "Business Center Channel"))
+ENTT1 <- ENTT[,c("AREA_CODE",'branch_create')]
+ENTS1 <- ENTS[,c("AREA_CODE",'branch_create')]
+
+MENTT1 <- merge(ENTT1,area1,by.x = "AREA_CODE",by.y = "Area.code",all.x =TRUE)
+MENTS1 <- merge(ENTS1,area1,by.x = "AREA_CODE",by.y = "Area.code",all.x =TRUE)
+
+TENTT1 <- as.data.frame(table(MENTT1$LUGAR))
+
+names (TENTT1)[1] = "lugart"
+names (TENTT1)[2] = "Ordenes"
+TENTS1 <- as.data.frame(table(MENTS1$LUGAR))
+
+names (TENTS1)[1] = "lugars"
+names (TENTS1)[2] = "Entregados"
+
+CTENTS <- merge(TENTS1,TENTT1,by.x = "lugars",by.y = "lugart",all.x =TRUE)
+
+CTENTS$Efectividad <- CTENTS$Entregados/CTENTS$`Ordenes`*100
+
+# BASE FINAL CTENTSF
+CTENTSF<- filter(CTENTS,Entregados>=15)%>% 
+  arrange(desc(Efectividad))
+names (CTENTSF)[1] = "UBIGEO"
+
+
+CTENTSFF <-CTENTSF 
+EFECTIVIDAD1 <-round(CTENTSFF$Efectividad,0)
+EFECTIVIDAD1 <-data.frame(EFECTIVIDAD1)
+
+EFECTIVIDAD1$con="%"
+my_cols <- c("EFECTIVIDAD1","con")
+EFECTIVIDAD1$EFECTIVIDAD=do.call(paste, c(EFECTIVIDAD1[my_cols], sep=""))
+
+EFECTIVIDAD=EFECTIVIDAD1[,c("EFECTIVIDAD")]
+
+CTENTSFF <- data.frame(CTENTSF,EFECTIVIDAD)
+
+CTENTSFF <-CTENTSFF[,c("UBIGEO","Entregados","Ordenes","EFECTIVIDAD")]
+
+ubi<-str_split_fixed(CTENTSFF$UBIGEO, "-", 3)
+ubi <-  gsub(" ", "", ubi)
+ubi<-data.frame(ubi)
+
+Depa <-unite(ubi, Zona,c("X1","X3"),  sep = " - ", remove = TRUE)
+
+Zona <- Depa$Zona
+Zona <- data.frame(Zona)
+
+CTENTSFF <- data.frame(CTENTSFF,Zona)
+CTENTSFF <-CTENTSFF[,c("Zona","Entregados","Ordenes","EFECTIVIDAD")]
+names(CTENTSFF)[4] = "Efect%"
+
+CTENTSFF%>%
+kbl() %>%
+  kable_material(c("striped", "hover"))
+
+
+```
+
+
+# Reporte de ventas Distribuidor Online "PUNBR" & "MADBR"
+
+```{r, message=FALSE, echo=FALSE}
+
+B1=read.xlsx("D://BITEL//KPI//BD_PMBR.xlsx")
+
+
+db1=B1[,c("Time.of.Finished")]
+db2=as.vector(db1)
+db3=as.data.frame(db2)
+db3$fecha=substr(db3$db2, start = 0, stop = 10)
+db4=db3[,c("fecha")]
+db4=as.POSIXct(db4)
+db4=as.data.frame(db4)
+names(db4)[1] = "fecha"
+db4$mes=as.numeric(format(db4$fecha,'%m'))
+USUARIO <- casefold(B1$consultantCode, upper = TRUE)   
+
+B2 <- data.frame(B1,db4,USUARIO)
+
+
+B3 <- filter(B2,Status=="Suscriptor registrado",mes=="12")
+B4 <-as.data.frame(B3[,c("USUARIO")])
+
+names(B4)[1]='USUARIO'
+
+USUARIO <- c("PUNAD00038","PUNAD00047","PUNAD00044","PUNAD00043","PUNAD00042",
+"PUNAD00041","PUNAD00039","PUNAD00033","PUNAD00031","PUNAD00023",
+"PUNAD00020","PUNAD00017","PUNAD00015","MADAD00014","MADAD00011","PUNAD00049",
+"PUNAD00050","PUNAD00048")
+
+
+DO <- c("PUNDO08","PUNDO16","PUNDO20","PUNDO19","PUNDO18","PUNDO17",
+  "PUNDO15","PUNDO14","PUNDO13","PUNDO09","PUNDO05","PUNDO05","PUNDO05",
+  "MADDO06","MADDO01","PUNDO11","PUNDO11","PUNDO11")
+
+DO1 <-c("PUNDO08","PUNDO16","PUNDO20","PUNDO19","PUNDO18","PUNDO17",
+        "PUNDO15","PUNDO14","PUNDO13","PUNDO09","PUNDO05",
+        "MADDO06","MADDO01","PUNDO11")
+
+NOMBRE <- c("Bricelda","Jackie","Alexander","Ronald","Angelo","Nelson Estela","Jluis",
+        "Marco","David H","Luis","Rolando","Mario","Kenny",
+        "Angelica")
+META <- c(99,30,37,30,30,30,30,30,30,30,36,60,30,30)
+extr <-data.frame(USUARIO,DO) 
+
+Resumen=inner_join(B4,extr,by="USUARIO")
+Resumen1=as.data.frame(table(Resumen$DO))
+names(Resumen1)[1]='DO'
+names(Resumen1)[2]='VENTAS'
+Resumen1 <- Resumen1 %>% arrange(desc(VENTAS)) 
+
+extr1<-data.frame(DO1,NOMBRE,META) 
+names(extr1)[1]='DO'
+Resumen1 <- left_join(Resumen1,extr1,by="DO")
+
+Resumen2 <-mutate(Resumen1, FALTA=META-VENTAS,AVANCE=round(VENTAS/META*100,2),POR="%")
+Resumen2<-unite(Resumen2, AVANCE,c("AVANCE","POR"),  sep = "", remove = TRUE)
+Resumen2 <- mutate(Resumen2,AVANCES=round(VENTAS/META*100,0))
+
+Resumen2 <-Resumen2[,c("DO","NOMBRE","VENTAS","META","FALTA","AVANCE",
+                       "AVANCES")]
+
+Resumen2$AVANCES <- color_bar("gray")(Resumen2$AVANCES)
+Resumen2$VENTAS <- color_tile("indianred1","springgreen1")(Resumen2$VENTAS)
+
+kbl(Resumen2, escape = F) %>%
+  kable_paper("hover",full_width = F) %>%
+column_spec(7, width = "3cm") %>%
+  add_header_above(c(" ", "SALES REPORT CHANNEL DO"=6))
+
+
+```
+
+
+
+
